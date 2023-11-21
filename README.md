@@ -1,2 +1,2 @@
 # bimm143
-Bioinformatics class
+My classwork for F23 in BIMM143 at UCSD.
