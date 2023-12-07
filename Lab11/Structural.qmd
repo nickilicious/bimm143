@@ -1,0 +1,308 @@
+---
+title: "Class 10: Comparative analisys of structures"
+author: "Nicolò (PID: A18109144)"
+format: pdf
+---
+
+We need some new packages, these include `bio3d` and `msa`.
+
+The `msa` package is from BioConductor. These packages focus on genomics type work and are managed by the `BioConductor` package.
+
+Install `install.packages("BiocManager")` and then `BiocManager::install("msa")` all entered in the R "brain" console.
+
+```{r}
+library(bio3d)
+
+aa <- get.seq("1ake_A")
+aa
+```
+
+Now I can search the PDB database for related sequences:
+
+```{r}
+#b <- blast.pdb(aa)
+#hits <- plot(b)
+```
+
+```{r}
+#attributes(b)
+#head(b$hit.tbl)
+```
+
+These are the related structures in the PDB database that we found via a BLAST search...
+
+```{r}
+hits <- NULL
+hits$pdb.id <- c('1AKE_A','6S36_A','6RZE_A','3HPR_A','1E4V_A','5EJE_A','1E4Y_A','3X2S_A','6HAP_A','6HAM_A','4K46_A','3GMT_A','4PZL_A')
+
+hits$pdb.id
+```
+
+Side-note: lets's annotate the structures (in other words find out what they are, what species they are from, stuff about the experiment they were solved in etc.)
+
+For this we can use the `pdb.annotate()`
+
+```{r}
+anno <- pdb.annotate(hits$pdb.id)
+```
+
+```{r}
+# attributes(anno)
+head(anno)
+```
+
+Now we can download all these structures for further analysis.
+
+```{r}
+# Download releated PDB files
+files <- get.pdb(hits$pdb.id, path="pdbs", split=TRUE, gzip=TRUE)
+```
+
+Now we have all these structures we can Align and Supperpose...
+
+```{r}
+# Align releated PDBs
+pdbs <- pdbaln(files, fit = TRUE, exefile="msa")
+pdbs
+```
+
+## Principal Component analysis
+
+```{r}
+# Perform PCA
+pc.xray <- pca(pdbs)
+plot(pc.xray)
+```
+
+```{r}
+# Visualize first principal component
+pc1 <- mktrj(pc.xray, pc=1, file="pc_1.pdb")
+```
+
+# AlphaFold
+
+## Querying the AlphaFold database
+
+> 1. Use the following sequence to search AFDB:
+
+`> HIV-Pr`  
+`PQITLWQRPLVTIKIGGQLKEALLDTGADDTVLEEMSLPGRWKPKMIGGIGGFIKVRQY`  
+`DQILIEICGHKAIGTVLVGPTPVNIIGRNLLTQIGCTLNF`
+
+The top hit is `Peptidase A2 domain-containing protein` from `Thalassobius mangrovi`, which is not an HIV protein.
+
+## Making predictions
+
+We used AlphaFold's Colab Notebook to predict the structure of the HIV protease as a monomer and as an homodimer.
+
+## Interpreting results
+
+### Visualization of the models and their estimated reliability
+
+> HIV protease monomer colored for uncertainty/disorder
+
+![](HIVPR_MONOMER.png)
+
+## Custom analysis of resulting models
+
+Setting the directory
+
+```{r}
+results_dir <- "HIVpr_dimer_23119/"
+```
+
+```{r}
+# File names for all PDB models
+pdb_files <- list.files(path=results_dir,
+                        pattern="*.pdb",
+                        full.names = TRUE)
+pdb_files
+```
+
+```{r}
+library(bio3d)
+
+# Read all data from Models 
+#  and superpose/fit coords
+pdbs <- pdbaln(pdb_files, fit=TRUE, exefile="msa")
+```
+
+Let's see the alignments
+
+```{r}
+pdbs
+```
+
+Calculate the RMSD between all models
+
+```{r}
+rd <- rmsd(pdbs)
+range(rd)
+```
+
+Draw a heatmap of RMSD matrix values
+
+```{r}
+library(pheatmap)
+
+colnames(rd) <- paste0("m",1:5)
+rownames(rd) <- paste0("m",1:5)
+pheatmap(rd)
+```
+
+And a plot pLDDT values across all models
+
+```{r}
+# Read a reference PDB structure
+pdb <- read.pdb("1hsg")
+```
+
+```{r}
+plotb3(pdbs$b, typ="l", lwd=2, sse=pdb)
+points(pdbs$b[2,], typ="l", col="red")
+points(pdbs$b[3,], typ="l", col="blue")
+points(pdbs$b[4,], typ="l", col="darkgreen")
+points(pdbs$b[5,], typ="l", col="orange")
+abline(v=100, col="gray")
+```
+
+We can improve the superposition/fitting of our models by finding the most consistent “rigid core” common across all the models. For this we will use the core.find() function:
+
+```{r}
+core <- core.find(pdbs)
+```
+
+We can use the identified core atom positions as a basis for a more suitable superposition:
+
+```{r}
+core.inds <- print(core, vol=0.5)
+```
+
+```{r}
+xyz <- pdbfit(pdbs, core.inds, outpath="corefit_structures")
+```
+
+> HIV protease dimer colored for uncertainty/disorder
+
+![](HIVPR_DIMER.png)
+
+Now we can update our RMSD analysis and examine the RMSF between positions of the structure:
+
+```{r}
+rd <- rmsd(xyz)
+```
+
+```{r}
+# Change the names for easy reference
+colnames(rd) <- paste0("m",1:5)
+rownames(rd) <- paste0("m",1:5)
+pheatmap(rd)
+```
+
+```{r}
+rf <- rmsf(xyz)
+
+plotb3(rf, sse=pdb)
+abline(v=100, col="gray", ylab="RMSF")
+```
+
+### Predicted Alignment Error for domains
+
+Independent of the 3D structure, AlphaFold produces an output called Predicted Aligned Error (PAE). This is detailed in the JSON format files, one for each model structure.
+
+Below we read these files and see that AlphaFold produces a useful inter-domain prediction for model 1 but not for model 5:
+
+```{r}
+library(jsonlite)
+
+# Listing of all PAE JSON files
+pae_files <- list.files(path=results_dir,
+                        pattern=".*model.*\\.json",
+                        full.names = TRUE)
+```
+
+```{r}
+pae1 <- read_json(pae_files[1],simplifyVector = TRUE)
+pae5 <- read_json(pae_files[5],simplifyVector = TRUE)
+
+attributes(pae1)
+```
+
+```{r}
+# Per-residue pLDDT scores 
+#  same as B-factor of PDB..
+head(pae1$plddt) 
+```
+
+The maximum PAE values - we can see that model 5 is much worse than model 1. The lower the better.
+
+```{r}
+pae1$max_pae
+```
+
+```{r}
+pae5$max_pae
+```
+
+We can plot these with ggplot or with functions from the Bio3D package:
+
+```{r}
+plot.dmat(pae1$pae, 
+          xlab="Residue Position (i)",
+          ylab="Residue Position (j)")
+```
+
+```{r}
+plot.dmat(pae5$pae, 
+          xlab="Residue Position (i)",
+          ylab="Residue Position (j)",
+          grid.col = "black",
+          zlim=c(0,30))
+```
+
+We should really plot all of these using the same z range. Here is the model 1 plot again but this time using the same data range as the plot for model 5:
+
+```{r}
+plot.dmat(pae1$pae, 
+          xlab="Residue Position (i)",
+          ylab="Residue Position (j)",
+          grid.col = "black",
+          zlim=c(0,30))
+```
+
+### Residue conservation from alignment file
+
+```{r}
+aln_file <- list.files(path=results_dir,
+                       pattern=".a3m$",
+                        full.names = TRUE)
+aln_file
+```
+
+```{r}
+aln <- read.fasta(aln_file[1], to.upper = TRUE)
+```
+
+```{r}
+dim(aln$ali)
+```
+
+```{r}
+sim <- conserv(aln)
+plotb3(sim[1:99], sse=trim.pdb(pdb, chain="A"))
+```
+
+```{r}
+con <- consensus(aln, cutoff = 0.9)
+con$seq
+```
+
+```{r}
+m1.pdb <- read.pdb(pdb_files[1])
+occ <- vec2resno(c(sim[1:99], sim[1:99]), m1.pdb$atom$resno)
+write.pdb(m1.pdb, o=occ, file="m1_conserv.pdb")
+```
+
+> HIV protease colored for occupancy
+
+![](M1_CONSERV.PDB.png)
