@@ -13,7 +13,7 @@ My classwork for F23 in [BIMM143](https://bioboot.github.io/bimm143_F23/) at UC 
 - CLass 13: [RNASeq analysis with DESeq2](https://github.com/nickilicious/bimm143/blob/main/Lab13/Drug.md)
 - Class 14: [RNASeq mini-project](https://github.com/nickilicious/bimm143/blob/main/Lab14/RNASeq.md)
 - Class 15: Git and Github
-- Class 17: [BLAST on AWS](https://github.com/nickilicious/bimm143/blob/main/Lab17/Graphs.md)
+- Class 17: [BLAST on AWS using Unix Bash](https://github.com/nickilicious/bimm143/blob/main/Lab17/Graphs.md)
 - Class 18: [Analyzing sequencing data in the
 cloud](https://github.com/nickilicious/bimm143/blob/main/Lab18/Extra%20Credit.md)
 - Class 19: [Investigating Pertussis
