@@ -1,0 +1,48 @@
+---
+title: "HW Class 6 (R Functions)"
+author: "Nicolò (PID: 18109144)"
+format: pdf
+---
+
+```{r}
+# Can you improve this analysis code?
+library(bio3d)
+s1 <- read.pdb("4AKE")  # kinase with drug
+s2 <- read.pdb("1AKE")  # kinase no drug
+s3 <- read.pdb("1E4Y")  # kinase with drug
+s1.chainA <- trim.pdb(s1, chain="A", elety="CA")
+s2.chainA <- trim.pdb(s2, chain="A", elety="CA")
+s3.chainA <- trim.pdb(s1, chain="A", elety="CA")
+s1.b <- s1.chainA$atom$b
+s2.b <- s2.chainA$atom$b
+s3.b <- s3.chainA$atom$b
+plotb3(s1.b, sse=s1.chainA, typ="l", ylab="Bfactor") 
+plotb3(s2.b, sse=s2.chainA, typ="l", ylab="Bfactor") 
+plotb3(s3.b, sse=s3.chainA, typ="l", ylab="Bfactor")
+```
+
+Let's write a function that accepts the PDB identifier as an argument and returns Bfactor vs. Residue plots:
+
+```{r}
+prot_analysis <- function(x) {
+  
+  #load the protein data as a PDB object
+  s <- read.pdb(x)
+  
+  #produce a PDB object only containing chain A data
+  chain <- trim.pdb(s, chain="A", elety="CA")
+  
+  #plot each atom's Bfactor
+  plotb3(chain$atom$b, sse=chain, typ="l", ylab="Bfactor")
+  
+} 
+```
+
+And use it to do the analysis
+
+```{r}
+library(bio3d) #load the bio3d package
+prot_analysis("4AKE") # kinase with drug
+prot_analysis("1AKE") # kinase no drug
+prot_analysis("1E4Y") # kinase with drug
+```

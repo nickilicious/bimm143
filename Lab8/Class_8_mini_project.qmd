@@ -1,0 +1,277 @@
+---
+title: "Class 8 Mini-Project"
+author: "Nicolò (PID: A18109144)"
+format: pdf
+---
+
+Today we will apply the machine learning methods we introduced in the last class on breast cancer biopsy data from fine needle aspiration (FNA)
+
+## Data input
+The data is supplied on CSV format:
+
+```{r}
+wisc.df <- read.csv("WisconsinCancer.csv", row.names=1)
+head(wisc.df)
+```
+
+```{r}
+# We can use -1 here to remove the first column
+wisc.data <- wisc.df[,-1]
+# Create diagnosis vector for later 
+diagnosis <- as.factor(wisc.df$diagnosis)
+```
+
+> Q1. How many observations are in this dataset?
+
+```{r}
+nrow(wisc.data)
+```
+
+> Q2. How many of the observations have a malignant diagnosis?
+
+```{r}
+sum(diagnosis == "M")
+```
+
+> Q3. How many variables/features in the data are suffixed with _mean?
+
+```{r}
+# Retrieve column names
+colnames(wisc.data)
+# Look for the variables that are suffixed with "_mean"
+grep("_mean", colnames(wisc.data))
+# Count the variables
+length(grep("_mean", colnames(wisc.data)))
+```
+# Principal Component Analysis
+
+## Performing PCA
+
+```{r}
+# Check column means and standard deviations
+colMeans(wisc.data)
+
+apply(wisc.data,2,sd)
+```
+
+```{r}
+# Perform PCA on wisc.data by completing the following code
+wisc.pr <- prcomp(wisc.data, scale = TRUE)
+# Look at summary of results
+summary(wisc.pr)
+```
+
+> Q4. From your results, what proportion of the original variance is captured by the first principal components (PC1)?
+
+0.4427
+
+> Q5. How many principal components (PCs) are required to describe at least 70% of the original variance in the data?
+
+3, since PC3 is the first principal component to have a cumulative proportion >70% (72.636%). 
+
+> Q6. How many principal components (PCs) are required to describe at least 90% of the original variance in the data?
+
+7, since PC7 is the first principal component to have a cumulative proportion >70% (91.010%).
+
+## Interpreting PCA results
+
+Create a biplot of the wisc.pr using the biplot() function.
+
+```{r}
+biplot(wisc.pr)
+```
+
+> Q7. What stands out to you about this plot? Is it easy or difficult to understand? Why?
+
+The plot is very difficult to understand: text overlaps and produce a mess.
+
+A base R plot version:
+
+```{r}
+plot(wisc.pr$x[,1], wisc.pr$x[,2], col = diagnosis, xlab = "PC1", ylab = "PC2")
+```
+> Q8. Generate a similar plot for principal components 1 and 3. What do you notice about these plots?
+
+```{r}
+plot(wisc.pr$x[,1], wisc.pr$x[,3], col = diagnosis, xlab = "PC1", ylab = "PC3")
+```
+The distribution of the points is similar, but the distinction between the two subgroups is clearer.
+
+Let's make a ggplot version of the scatter plot
+
+```{r}
+# Create a data.frame for ggplot
+df <- as.data.frame(wisc.pr$x)
+df$diagnosis <- diagnosis
+
+# Load the ggplot2 package
+library(ggplot2)
+
+# Make a scatter plot colored by diagnosis
+ggplot(df) + 
+  aes(PC1, PC2, col=diagnosis) + 
+  geom_point()
+```
+
+## Variance explained
+
+```{r}
+# Calculate variance of each component
+pr.var <- wisc.pr$sdev^2
+head(pr.var)
+```
+```{r}
+# Variance explained by each principal component: pve
+pve <- pr.var / sum(pr.var)
+
+# Plot variance explained for each principal component
+plot(pve, xlab = "Principal Component", 
+     ylab = "Proportion of Variance Explained", 
+     ylim = c(0, 1), type = "o")
+```
+
+```{r}
+# Alternative scree plot of the same data, note data driven y-axis
+barplot(pve, ylab = "Precent of Variance Explained",
+     names.arg=paste0("PC",1:length(pve)), las=2, axes = FALSE)
+axis(2, at=pve, labels=round(pve,2)*100 )
+```
+
+## Communicating PCA results
+
+> Q9. For the first principal component, what is the component of the loading vector (i.e. wisc.pr$rotation[,1]) for the feature concave.points_mean?
+
+```{r}
+wisc.pr$rotation["concave.points_se",1]
+```
+
+> Q10. What is the minimum number of principal components required to explain 80% of the variance of the data?
+
+5, since PC5 is the first principal component to have a cumulative proportion >80% (84.734% - see summary before).
+
+```{r}
+which(cumsum(pve) >= 0.8)[1]
+```
+
+# Hierarchical clustering
+
+```{r}
+# Scale the wisc.data data using the "scale()" function
+data.scaled <- scale(wisc.data)
+```
+
+Calculate the (Euclidean) distances between all pairs of observations in the new scaled dataset and assign the result to data.dist.
+
+```{r}
+data.dist <- dist(data.scaled)
+```
+
+Create a hierarchical clustering model using complete linkage. Manually specify the method argument to hclust() and assign the results to wisc.hclust.
+
+```{r}
+wisc.hclust <- hclust(data.dist, "complete")
+```
+
+# Results of hierarchical clustering
+
+> Q11. Using the plot() and abline() functions, what is the height at which the clustering model has 4 clusters?
+
+```{r}
+plot(wisc.hclust)
+abline(h = 19, col="red", lty=2)
+```
+
+The height is 19.
+
+# Selecting number of clusters
+
+Let's cut the tree so that we only have 4 subgroups.
+
+```{r}
+wisc.hclust.clusters <- cutree(wisc.hclust, k = 4)
+```
+
+We can use the table() function to compare the cluster membership to the actual diagnoses.
+
+```{r}
+table(wisc.hclust.clusters, diagnosis)
+```
+
+> Q12. Can you find a better cluster vs diagnoses match by cutting into a different number of clusters between 2 and 10?
+
+```{r}
+wisc.hclust.clusters <- cutree(wisc.hclust, k = 2)
+table(wisc.hclust.clusters, diagnosis)
+```
+
+No, the best separation of diagnosis happens with 4-5 groups.
+
+## Using different methods
+
+There are number of different “methods” we can use to combine points during the hierarchical clustering procedure. These include `"single"`, `"complete"`, `"average"` and `"ward.D2"`.
+
+```{r}
+wisc.hclust.single <- hclust(data.dist, "single")
+wisc.hclust.average <- hclust(data.dist, "average")
+wisc.hclust.ward.D2 <- hclust(data.dist, "ward.D2")
+```
+
+Let's visualize
+
+```{r}
+plot(wisc.hclust.single)
+plot(wisc.hclust.average)
+plot(wisc.hclust.ward.D2)
+```
+```{r}
+table(cutree(wisc.hclust.ward.D2, k = 2), diagnosis)
+```
+
+> Q13. Which method gives your favorite results for the same data.dist dataset? Explain your reasoning.
+
+I prefer the `"ward.D2"` method because it separates the diagnoses in different clusters sooner (as few as `k = 2`).
+
+# Combining methods
+
+Using the minimum number of principal components required to describe at least 90% of the variability in the data, create a hierarchical clustering model with the linkage `method="ward.D2"`. We use Ward’s criterion here because it is based on multidimensional variance like principal components analysis. Assign the results to `wisc.pr.hclust`.
+
+```{r}
+# Create a hierarchical clustering model with up to PC7 to describe 90% of the variability
+wisc.pr.hclust <- hclust(dist(wisc.pr$x[,1:7]), "ward.D2")
+grps <- cutree(wisc.pr.hclust, k=2)
+table(grps)
+table(grps, diagnosis)
+plot(wisc.pr$x[,1:2], col=grps)
+plot(wisc.pr$x[,1:2], col=diagnosis)
+```
+
+Note the color swap here as the hclust cluster 1 is mostly “M” and cluster 2 is mostly “B” as we saw from the results of calling table(grps, diagnosis). To match things up we can turn our groups into a factor and reorder the levels so cluster 2 comes first and thus gets the first color (black) and cluster 1 gets the second color (red).
+
+```{r}
+g <- as.factor(grps)
+levels(g)
+g <- relevel(g,2)
+levels(g)
+# Plot using the re-ordered factor 
+plot(wisc.pr$x[,1:2], col=g)
+```
+
+```{r}
+## Use the distance along the first 7 PCs for clustering i.e. wisc.pr$x[, 1:7]
+wisc.pr.hclust <- hclust(dist(wisc.pr$x[,1:7]), method="ward.D2")
+```
+
+Cut this hierarchical clustering model into 2 clusters and assign the results to wisc.pr.hclust.clusters.
+
+```{r}
+wisc.pr.hclust.clusters <- cutree(wisc.pr.hclust, k=2)
+```
+
+> Q15. How well does the newly created model with four clusters separate out the two diagnoses?
+
+```{r}
+# Compare to actual diagnoses
+table(wisc.pr.hclust.clusters, diagnosis)
+```
+
+It separates diagnoses better that the `"ward.D2"` method alone.
